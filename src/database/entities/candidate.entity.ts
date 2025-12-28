@@ -90,7 +90,6 @@ export class Candidate {
     length: 20,
     default: 'active',
   })
-  @Index()
   status: 'active' | 'inactive' | 'pending' | 'failed';
 
   // Processing status message (for failures)

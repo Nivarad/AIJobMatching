@@ -10,7 +10,7 @@ import { VectorService } from './vector.service';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         host: configService.get<string>('QDRANT_HOST', 'localhost'),
-        port: configService.get<number>('QDRANT_PORT', 6333),
+        port: parseInt(configService.get<string>('QDRANT_PORT', '6333'), 10),
         candidatesCollection: configService.get<string>(
           'QDRANT_CANDIDATES_COLLECTION',
           'candidates',
@@ -19,9 +19,9 @@ import { VectorService } from './vector.service';
           'QDRANT_JOBS_COLLECTION',
           'jobs',
         ),
-        embeddingDimensions: configService.get<number>(
-          'EMBEDDING_DIMENSIONS',
-          384,
+        embeddingDimensions: parseInt(
+          configService.get<string>('EMBEDDING_DIMENSIONS', '384'),
+          10,
         ),
       }),
     },

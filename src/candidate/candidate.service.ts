@@ -2,7 +2,6 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Candidate } from '../database/entities';
-import { QueueService } from '../queue/queue.service';
 import { OrchestratorAgent } from '../agents/orchestrator.agent';
 import { CandidateIngestionAgent } from '../agents/candidate-ingestion.agent';
 
@@ -13,27 +12,29 @@ export class CandidateService {
   constructor(
     @InjectRepository(Candidate)
     private candidateRepository: Repository<Candidate>,
-    private readonly queueService: QueueService,
     private readonly orchestratorAgent: OrchestratorAgent,
     private readonly candidateIngestionAgent: CandidateIngestionAgent,
   ) {}
 
   /**
-   * Load a single CV file and queue for processing
+   * Load a single CV file and process immediately
    */
   async loadCV(
     filePath: string,
-  ): Promise<{ jobId: string; message: string }> {
-    this.logger.log(`Queueing CV for processing: ${filePath}`);
+  ): Promise<{ candidateId: string; message: string }> {
+    this.logger.log(`Processing CV: ${filePath}`);
 
-    const job = await this.queueService.addCandidateIngestionJob(
+    const result = await this.candidateIngestionAgent.processCV(
       filePath,
-      filePath.split(/[/\\]/).pop() || 'unknown.pdf',
     );
 
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to process CV');
+    }
+
     return {
-      jobId: job.id as string,
-      message: `CV queued for processing. Use /api/queue/status/${job.id} to check progress.`,
+      candidateId: result.candidateId!,
+      message: `CV processed successfully. Candidate ID: ${result.candidateId}`,
     };
   }
 

@@ -19,6 +19,7 @@ export interface CandidatePayload {
   location?: string;
   summary: string;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 export interface JobPayload {
@@ -29,6 +30,7 @@ export interface JobPayload {
   location?: string;
   summary: string;
   createdAt: string;
+  [key: string]: unknown;
 }
 
 export interface SearchResult {
@@ -109,28 +111,25 @@ export class VectorService implements OnModuleInit {
    * Create a new collection with the configured dimensions
    */
   private async createCollection(collectionName: string): Promise<void> {
-    await this.client.createCollection(collectionName, {
-      vectors: {
+    try {
+      this.logger.log(`Creating collection ${collectionName} with dimensions: ${this.embeddingDimensions}`);
+      
+      const vectorsConfig = {
         size: this.embeddingDimensions,
-        distance: 'Cosine',
-      },
-    });
-
-    // Create payload indexes for faster filtering
-    await this.client.createPayloadIndex(collectionName, {
-      field_name: 'skills',
-      field_schema: 'keyword',
-    });
-
-    await this.client.createPayloadIndex(collectionName, {
-      field_name: 'experienceYears',
-      field_schema: 'integer',
-    });
-
-    await this.client.createPayloadIndex(collectionName, {
-      field_name: 'location',
-      field_schema: 'keyword',
-    });
+        distance: 'Cosine' as const,
+      };
+      
+      this.logger.log(`Vectors config: ${JSON.stringify(vectorsConfig)}`);
+      
+      await this.client.createCollection(collectionName, {
+        vectors: vectorsConfig,
+      });
+      
+      this.logger.log(`Successfully created collection: ${collectionName}`);
+    } catch (error) {
+      this.logger.error(`Failed to create collection ${collectionName}:`, error);
+      throw error;
+    }
   }
 
   /**

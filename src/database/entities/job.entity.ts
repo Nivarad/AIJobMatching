@@ -78,7 +78,6 @@ export class Job {
     length: 20,
     default: 'open',
   })
-  @Index()
   status: 'open' | 'closed' | 'draft';
 
   @CreateDateColumn()

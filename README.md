@@ -8,10 +8,10 @@ An AI-powered job-candidate matching system built with NestJS that uses LLM agen
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        NestJS Application                            │
 ├─────────────────┬─────────────────┬─────────────────────────────────┤
-│  /candidate/*   │   /job-offer/*  │           /queue/*              │
-│  - POST /load   │   - POST /match │           - GET /pending        │
-│  - POST /load_  │   - GET /       │           - GET /status/:id     │
-│    folder       │   - GET /:id    │           - GET /overview       │
+│  /candidate/*   │   /job-offer/*  │         Direct Processing       │
+│  - POST /load   │   - POST /match │      (No queuing needed)        │
+│  - POST /load_  │   - GET /       │                                 │
+│    folder       │   - GET /:id    │                                 │
 │  - GET /        │                 │                                 │
 │  - GET /:id     │                 │                                 │
 ├─────────────────┴─────────────────┴─────────────────────────────────┤
@@ -26,12 +26,12 @@ An AI-powered job-candidate matching system built with NestJS that uses LLM agen
 │  - Create embeddings     │  │ - MatchingGradeTool (scoring)      │  │
 │  - Store in DB + Vector  │  └────────────────────────────────────┘  │
 └──────────────────────────┴──────────────────────────────────────────┘
-              │                       │                    │
-         ┌────┴────┐            ┌─────┴─────┐        ┌─────┴─────┐
-         │ Qdrant  │            │ PostgreSQL│        │   Redis   │
-         │ :6333   │            │   :5432   │        │   :6379   │
-         │ (Vector)│            │   (SQL)   │        │  (Queue)  │
-         └─────────┘            └───────────┘        └───────────┘
+              │                       │
+         ┌────┴────┐            ┌─────┴─────┐
+         │ Qdrant  │            │ PostgreSQL│
+         │ :6333   │            │   :5432   │
+         │ (Vector)│            │   (SQL)   │
+         └─────────┘            └───────────┘
 ```
 
 ## 🛠️ Tech Stack
@@ -43,7 +43,6 @@ An AI-powered job-candidate matching system built with NestJS that uses LLM agen
 | **Embeddings** | BAAI/bge-small-en-v1.5 (384 dimensions) |
 | **Vector Database** | Qdrant |
 | **Relational Database** | PostgreSQL |
-| **Job Queue** | BullMQ + Redis |
 | **PDF Processing** | pdf-parse |
 | **Containerization** | Docker Compose |
 
@@ -52,7 +51,7 @@ An AI-powered job-candidate matching system built with NestJS that uses LLM agen
 Before you begin, ensure you have the following installed:
 
 - **Node.js** >= 18.x
-- **npm** >= 9.x
+- **pnpm** >= 8.x
 - **Docker** & **Docker Compose**
 - **Hugging Face Account** with API token
 
@@ -71,7 +70,7 @@ Before you begin, ensure you have the following installed:
 cd "Project 4"
 
 # Install dependencies
-npm install
+pnpm install
 ```
 
 ### 2. Configure Environment
@@ -87,41 +86,41 @@ copy .env.example .env
 ### 3. Start Services
 
 ```bash
-# Start all Docker containers (PostgreSQL, Qdrant, Redis)
-npm run docker:up
+# Start all Docker containers (PostgreSQL, Qdrant)
+pnpm run docker:up
 
 # Wait for services to be healthy, then start the application
-npm run start:dev
+pnpm run start:dev
 
 # OR start everything at once
-npm run start:all
+pnpm run start:all
 ```
 
 ### 4. Verify Installation
 
 ```bash
 # Check if services are running
-npm run docker:ps
+pnpm run docker:ps
 
 # Application should be running at:
 # http://localhost:3000/api
 ```
 
-## 📦 NPM Scripts Reference
+## 📦 PNPM Scripts Reference
 
 | Script | Description |
 |--------|-------------|
-| `npm run start:dev` | Start NestJS in development mode with hot reload |
-| `npm run start:prod` | Start NestJS in production mode |
-| `npm run start:all` | Start Docker containers + NestJS app |
-| `npm run docker:up` | Start all Docker containers in background |
-| `npm run docker:down` | Stop and remove all Docker containers |
-| `npm run docker:stop` | Stop Docker containers (preserve data) |
-| `npm run docker:logs` | Follow logs from all containers |
-| `npm run docker:ps` | Show status of Docker containers |
-| `npm run docker:clean` | Stop containers and remove volumes (⚠️ deletes data) |
-| `npm run build` | Build the application |
-| `npm run test` | Run tests |
+| `pnpm run start:dev` | Start NestJS in development mode with hot reload |
+| `pnpm run start:prod` | Start NestJS in production mode |
+| `pnpm run start:all` | Start Docker containers + NestJS app |
+| `pnpm run docker:up` | Start all Docker containers in background |
+| `pnpm run docker:down` | Stop and remove all Docker containers |
+| `pnpm run docker:stop` | Stop Docker containers (preserve data) |
+| `pnpm run docker:logs` | Follow logs from all containers |
+| `pnpm run docker:ps` | Show status of Docker containers |
+| `pnpm run docker:clean` | Stop containers and remove volumes (⚠️ deletes data) |
+| `pnpm run build` | Build the application |
+| `pnpm run test` | Run tests |
 
 ## 🔌 API Reference
 
@@ -387,7 +386,6 @@ ELSE:
 |---------|------|--------|-------------|
 | PostgreSQL | 5432 | `postgres_data` | Relational database for candidates and jobs |
 | Qdrant | 6333 | `qdrant_data` | Vector database for semantic search |
-| Redis | 6379 | `redis_data` | Queue storage for BullMQ |
 
 ### Persistent Volumes
 All data is persisted in named Docker volumes. To completely reset:
@@ -411,8 +409,6 @@ npm run docker:clean
 | `DB_NAME` | PostgreSQL database | `job_matching` |
 | `QDRANT_HOST` | Qdrant host | `localhost` |
 | `QDRANT_PORT` | Qdrant port | `6333` |
-| `REDIS_HOST` | Redis host | `localhost` |
-| `REDIS_PORT` | Redis port | `6379` |
 | `LLM_MODEL` | Hugging Face LLM model | `meta-llama/Llama-3.1-8B-Instruct` |
 | `EMBEDDING_MODEL` | Embedding model | `BAAI/bge-small-en-v1.5` |
 | `MAX_CANDIDATES_RETURN` | Max candidates in match results | `5` |
@@ -481,11 +477,6 @@ src/
 ├── vector/
 │   ├── vector.module.ts        # Qdrant configuration
 │   └── vector.service.ts       # Qdrant operations
-├── queue/
-│   ├── queue.module.ts         # BullMQ configuration
-│   ├── queue.controller.ts     # Queue endpoints
-│   ├── queue.service.ts        # Queue operations
-│   └── processors/             # Job processors
 ├── candidate/
 │   ├── candidate.module.ts
 │   ├── candidate.controller.ts

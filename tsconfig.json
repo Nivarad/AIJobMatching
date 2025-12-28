@@ -22,7 +22,6 @@
       "@common/*": ["src/common/*"],
       "@database/*": ["src/database/*"],
       "@vector/*": ["src/vector/*"],
-      "@queue/*": ["src/queue/*"],
       "@agents/*": ["src/agents/*"],
       "@candidate/*": ["src/candidate/*"],
       "@job-offer/*": ["src/job-offer/*"]

@@ -42,31 +42,11 @@ services:
       - job-matching-network
     restart: unless-stopped
 
-  # Redis for BullMQ job queues
-  redis:
-    image: redis:7-alpine
-    container_name: job-matching-redis
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - job-matching-network
-    restart: unless-stopped
-
 volumes:
   postgres_data:
     name: job-matching-postgres-data
   qdrant_data:
     name: job-matching-qdrant-data
-  redis_data:
-    name: job-matching-redis-data
 
 networks:
   job-matching-network:

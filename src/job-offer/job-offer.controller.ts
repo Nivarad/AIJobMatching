@@ -15,8 +15,10 @@ import {
   DefaultValuePipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { JobOfferService } from './job-offer.service';
 
+@ApiTags('Job Offer')
 @Controller('job-offer')
 export class JobOfferController {
   constructor(private readonly jobOfferService: JobOfferService) {}
@@ -28,6 +30,22 @@ export class JobOfferController {
    */
   @Post('match')
   @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Match candidates', description: 'Upload a job description PDF and find matching candidates. Returns top 5 candidates sorted by match score.' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'PDF file of the job description',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Matching candidates found' })
+  @ApiResponse({ status: 400, description: 'Invalid file or no file uploaded' })
   async matchCandidates(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new HttpException('No file uploaded', HttpStatus.BAD_REQUEST);
@@ -64,6 +82,21 @@ export class JobOfferController {
    * Process a job description from server-side file path
    */
   @Post('match-path')
+  @ApiOperation({ summary: 'Match candidates from file path', description: 'Process a job description from server-side file path' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        filePath: {
+          type: 'string',
+          description: 'Path to the job description PDF file',
+          example: '/data/jobs/job_description.pdf',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Matching candidates found' })
+  @ApiResponse({ status: 400, description: 'filePath is required' })
   async matchCandidatesFromPath(@Body('filePath') filePath: string) {
     if (!filePath) {
       throw new HttpException(
@@ -93,6 +126,10 @@ export class JobOfferController {
    * Get all jobs with pagination
    */
   @Get()
+  @ApiOperation({ summary: 'Get all jobs', description: 'Get all jobs with pagination' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page', example: 20 })
+  @ApiResponse({ status: 200, description: 'List of jobs' })
   async findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
@@ -105,6 +142,8 @@ export class JobOfferController {
    * Get job statistics
    */
   @Get('stats')
+  @ApiOperation({ summary: 'Get statistics', description: 'Get job statistics' })
+  @ApiResponse({ status: 200, description: 'Job statistics' })
   async getStats() {
     return await this.jobOfferService.getStats();
   }
@@ -114,6 +153,10 @@ export class JobOfferController {
    * Get a specific job by ID
    */
   @Get(':id')
+  @ApiOperation({ summary: 'Get job by ID', description: 'Get a specific job by ID' })
+  @ApiParam({ name: 'id', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Job details' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
   async findOne(@Param('id') id: string) {
     return await this.jobOfferService.findOne(id);
   }
@@ -123,6 +166,10 @@ export class JobOfferController {
    * Close a job
    */
   @Patch(':id/close')
+  @ApiOperation({ summary: 'Close job', description: 'Close a job' })
+  @ApiParam({ name: 'id', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Job closed successfully' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
   async closeJob(@Param('id') id: string) {
     const job = await this.jobOfferService.closeJob(id);
     return {
@@ -137,6 +184,10 @@ export class JobOfferController {
    * Delete a job
    */
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete job', description: 'Delete a job' })
+  @ApiParam({ name: 'id', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Job deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
   async remove(@Param('id') id: string) {
     await this.jobOfferService.remove(id);
     return {
