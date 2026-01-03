@@ -11,7 +11,7 @@ import {
 export interface Skill {
   name: string;
   level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-  yearsOfExperience?: number;
+  yearsOfExperience?: number; // Can be decimal (e.g., 1.5 years)
 }
 
 // Experience interface
@@ -40,12 +40,12 @@ export class Candidate {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   @Index()
-  name: string;
+  name?: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
-  email: string;
+  @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+  email?: string;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   phone?: string;
@@ -65,7 +65,7 @@ export class Candidate {
   education: Education[];
 
   // Computed/extracted fields for faster querying
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'double precision', default: 0 })
   @Index()
   totalExperienceYears: number;
 

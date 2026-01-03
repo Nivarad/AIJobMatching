@@ -183,10 +183,14 @@ export class CandidateIngestionAgent {
     rawText: string,
     filePath: string,
   ): Promise<Candidate> {
-    // Check if candidate with same email exists
-    const existing = await this.candidateRepository.findOne({
-      where: { email: data.email },
-    });
+    // Check if candidate with same email exists (only if email is provided)
+    // Don't match on null emails as that would update random candidates
+    let existing: Candidate | null = null;
+    if (data.email) {
+      existing = await this.candidateRepository.findOne({
+        where: { email: data.email },
+      });
+    }
 
     if (existing) {
       // Update existing candidate

@@ -13,8 +13,8 @@ export interface PostgresQueryParams {
 
 export interface PostgresQueryResult {
   candidateId: string;
-  name: string;
-  email: string;
+  name?: string;
+  email?: string;
   skills: string[];
   experienceYears: number;
   location?: string;

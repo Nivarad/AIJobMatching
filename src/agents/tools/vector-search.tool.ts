@@ -46,7 +46,6 @@ export class VectorSearchTool {
       // Generate embedding for the query (with query prefix for BGE)
       const queryEmbedding = await this.embeddingService.embedText(
         params.queryText,
-        true, // isQuery = true for retrieval
       );
 
       // Search in Qdrant
@@ -96,7 +95,6 @@ export class VectorSearchTool {
       // Generate embedding for the query
       const queryEmbedding = await this.embeddingService.embedText(
         queryText,
-        true,
       );
 
       // Search in Qdrant
@@ -113,7 +111,7 @@ export class VectorSearchTool {
   /**
    * Generate embedding for text (exposed for external use)
    */
-  async generateEmbedding(text: string, isQuery: boolean = false): Promise<number[]> {
-    return await this.embeddingService.embedText(text, isQuery);
+  async generateEmbedding(text: string): Promise<number[]> {
+    return await this.embeddingService.embedText(text);
   }
 }

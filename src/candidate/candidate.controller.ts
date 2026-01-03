@@ -92,7 +92,7 @@ export class CandidateController {
     }
 
     try {
-      const result = await this.candidateService.loadFolder(dto.folderPath);
+      const result = await this.  candidateService.loadFolder(dto.folderPath);
 
       return {
         success: true,

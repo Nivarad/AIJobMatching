@@ -11,7 +11,7 @@ import {
 export interface JobRequirement {
   skill: string;
   required: boolean;
-  minYearsExperience?: number;
+  minYearsExperience?: number; // Can be decimal (e.g., 1.5 years)
 }
 
 // Salary range interface

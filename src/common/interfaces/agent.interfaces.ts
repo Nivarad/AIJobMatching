@@ -1,7 +1,7 @@
 // Extracted candidate data from LLM
 export interface ExtractedCandidateData {
-  name: string;
-  email: string;
+  name?: string;
+  email?: string;
   phone?: string;
   location?: string;
   summary: string;
@@ -60,8 +60,8 @@ export interface AgentProcessingResult {
 // Matching result from tools
 export interface MatchingResult {
   candidateId: string;
-  name: string;
-  email: string;
+  name?: string;
+  email?: string;
   matchScore: number;
   matchSources: ('sql' | 'vector')[];
   matchDetails: {
@@ -71,6 +71,6 @@ export interface MatchingResult {
     llmGrade?: number;
   };
   skills: string[];
-  experienceYears: number;
+  experienceYears: number; // Can be decimal (e.g., 19.5 years)
   summary?: string;
 }
