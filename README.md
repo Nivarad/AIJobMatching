@@ -2,6 +2,16 @@
 
 An intelligent job-candidate matching system built with **NestJS** that leverages **Large Language Models (LLMs)**, **Retrieval Augmented Generation (RAG)**, and a **multi-agent architecture** to intelligently match job descriptions with candidate CVs.
 
+---
+
+## 🖼️ System Overview Infographic
+
+![How an AI Job Matching Engine Works](./infographic.png)
+
+*The infographic above illustrates the complete flow: from PDF ingestion through LLM extraction, dual storage (SQL + Vector), dual-search matching strategy, multi-factor scoring algorithm, to final ranked results delivery.*
+
+---
+
 ## 📑 Table of Contents
 
 - [Overview](#-overview)
