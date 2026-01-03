@@ -56,7 +56,6 @@ export class CandidateIngestionAgent {
       // Step 4: Generate embedding (60-70%)
       const embedding = await this.embeddingService.embedText(
         searchSummary,
-        false, // Not a query
       );
       this.logger.log(`Generated embedding with ${embedding.length} dimensions`);
       await progressCallback?.(70);
@@ -135,7 +134,6 @@ export class CandidateIngestionAgent {
       // Step 4: Generate embedding
       const embedding = await this.embeddingService.embedText(
         searchSummary,
-        false,
       );
       await progressCallback?.(70);
 

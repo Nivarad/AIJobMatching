@@ -39,8 +39,8 @@ An AI-powered job-candidate matching system built with NestJS that uses LLM agen
 | Component | Technology |
 |-----------|------------|
 | **Framework** | NestJS + TypeScript |
-| **LLM** | Llama 3.1 8B Instruct (via Hugging Face Inference API) |
-| **Embeddings** | BAAI/bge-small-en-v1.5 (384 dimensions) |
+| **LLM** | Google Gemini 2.5 Flash Lite (via Google AI API) |
+| **Embeddings** | Google text-embedding-004 (768 dimensions) |
 | **Vector Database** | Qdrant |
 | **Relational Database** | PostgreSQL |
 | **PDF Processing** | pdf-parse |
@@ -53,13 +53,14 @@ Before you begin, ensure you have the following installed:
 - **Node.js** >= 18.x
 - **pnpm** >= 8.x
 - **Docker** & **Docker Compose**
-- **Hugging Face Account** with API token
+- **Google AI Studio Account** with API key
 
-### Hugging Face Setup
+### Google AI Setup
 
-1. Create an account at [huggingface.co](https://huggingface.co)
-2. Accept the Llama 3.1 license at [meta-llama/Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct)
-3. Generate an API token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create or sign in with your Google account
+3. Click "Get API Key" to generate a new API key
+4. Copy the API key for use in your environment configuration
 
 ## 🚀 Quick Start
 
@@ -79,9 +80,14 @@ pnpm install
 # Copy example environment file
 copy .env.example .env
 
-# Edit .env and add your Hugging Face token
-# HF_TOKEN=hf_your_token_here
+# Edit .env and add your Google AI API key
+# GEMINI_API_KEY=your_api_key_here
 ```
+
+**IMPORTANT:** If you have existing Qdrant collections from a previous installation, you must delete them before starting the application with the new embedding dimensions (768 instead of 384). You can do this by:
+- Accessing Qdrant dashboard at http://localhost:6333/dashboard after starting Docker
+- Deleting the `candidates` and `jobs` collections
+- Or use `docker-compose down -v` to remove all data volumes
 
 ### 3. Start Services
 
@@ -401,7 +407,7 @@ npm run docker:clean
 |----------|-------------|---------|
 | `NODE_ENV` | Environment mode | `development` |
 | `PORT` | Application port | `3000` |
-| `HF_TOKEN` | Hugging Face API token | **Required** |
+| `GEMINI_API_KEY` | Google AI API key | **Required** |
 | `DB_HOST` | PostgreSQL host | `localhost` |
 | `DB_PORT` | PostgreSQL port | `5432` |
 | `DB_USER` | PostgreSQL user | `postgres` |
@@ -409,8 +415,9 @@ npm run docker:clean
 | `DB_NAME` | PostgreSQL database | `job_matching` |
 | `QDRANT_HOST` | Qdrant host | `localhost` |
 | `QDRANT_PORT` | Qdrant port | `6333` |
-| `LLM_MODEL` | Hugging Face LLM model | `meta-llama/Llama-3.1-8B-Instruct` |
-| `EMBEDDING_MODEL` | Embedding model | `BAAI/bge-small-en-v1.5` |
+| `LLM_MODEL` | Google Gemini model | `gemini-2.5-flash-lite` |
+| `EMBEDDING_MODEL` | Google embedding model | `text-embedding-004` |
+| `EMBEDDING_DIMENSIONS` | Embedding vector dimensions | `768` |
 | `MAX_CANDIDATES_RETURN` | Max candidates in match results | `5` |
 | `DUAL_MATCH_SCORE` | Score for dual SQL+Vector match | `100` |
 
@@ -437,15 +444,20 @@ netstat -ano | findstr :5432
 # Kill the process or change port in .env
 ```
 
-### Hugging Face Issues
+### Google AI Issues
 
 **401 Unauthorized:**
-- Check that your `HF_TOKEN` is valid
-- Ensure you've accepted the Llama 3.1 license
+- Check that your `GEMINI_API_KEY` is valid
+- Verify the API key at [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-**Model loading slow:**
-- First request may take 20-60 seconds (cold start)
-- Subsequent requests will be faster
+**Rate limiting:**
+- Google AI has generous free tier limits
+- Check your usage at Google AI Studio dashboard
+- Consider upgrading if hitting limits
+
+**Model not found:**
+- Ensure `gemini-2.5-flash-lite` is available in your region
+- Check [Google AI documentation](https://ai.google.dev/) for model availability
 
 ### Database Issues
 

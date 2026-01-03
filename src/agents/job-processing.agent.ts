@@ -72,7 +72,7 @@ export class JobProcessingAgent {
     );
 
     // Step 5: Save to Qdrant
-    const embedding = await this.embeddingService.embedText(searchSummary, false);
+    const embedding = await this.embeddingService.embedText(searchSummary);
     const qdrantPointId = await this.saveJobToQdrant(job, embedding, searchSummary);
     job.qdrantPointId = qdrantPointId;
     await this.jobRepository.save(job);
@@ -128,7 +128,7 @@ export class JobProcessingAgent {
     );
 
     // Step 5: Save to Qdrant
-    const embedding = await this.embeddingService.embedText(searchSummary, false);
+    const embedding = await this.embeddingService.embedText(searchSummary);
     const qdrantPointId = await this.saveJobToQdrant(job, embedding, searchSummary);
     job.qdrantPointId = qdrantPointId;
     await this.jobRepository.save(job);
@@ -182,8 +182,9 @@ export class JobProcessingAgent {
     const sqlResults = await this.postgresQueryTool.queryCandidates({
       skills: allSkills,
       minExperienceYears: minExperience > 0 ? minExperience : undefined,
-      location: jobData.location,
+      // location: jobData.location,
       limit: 20,
+      minSkillMatchPercentage: 60, // Require 60% skill overlap
     });
     this.logger.log(`SQL found ${sqlResults.length} candidates`);
 

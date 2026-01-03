@@ -31,14 +31,14 @@ import { MatchingGradeTool } from './tools/matching-grade.tool';
       provide: 'LLM_CONFIG',
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        hfToken: configService.get<string>('HF_TOKEN'),
+        geminiApiKey: configService.get<string>('GEMINI_API_KEY'),
         llmModel: configService.get<string>(
           'LLM_MODEL',
-          'meta-llama/Llama-3.1-8B-Instruct',
+          'gemini-2.5-flash-lite',
         ),
         embeddingModel: configService.get<string>(
           'EMBEDDING_MODEL',
-          'BAAI/bge-small-en-v1.5',
+          'text-embedding-004',
         ),
         maxCandidatesReturn: configService.get<number>(
           'MAX_CANDIDATES_RETURN',

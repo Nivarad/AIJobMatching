@@ -1,42 +1,31 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import { HfInference } from '@huggingface/inference';
+import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { LLMConfig } from './llm.service';
 
 @Injectable()
 export class EmbeddingService {
   private readonly logger = new Logger(EmbeddingService.name);
-  private hf: HfInference;
+  private embeddings: GoogleGenerativeAIEmbeddings;
   private model: string;
 
   constructor(@Inject('LLM_CONFIG') private config: LLMConfig) {
-    this.hf = new HfInference(config.hfToken);
     this.model = config.embeddingModel;
+    this.embeddings = new GoogleGenerativeAIEmbeddings({
+      apiKey: config.geminiApiKey,
+      model: this.model,
+    });
     this.logger.log(`Embedding Service initialized with model: ${this.model}`);
   }
 
   /**
    * Generate embedding for a single text
-   * For BGE models, queries should have a special prefix for retrieval tasks
    */
-  async embedText(text: string, isQuery: boolean = false): Promise<number[]> {
+  async embedText(text: string): Promise<number[]> {
     try {
-      // BGE models recommend adding instruction prefix for queries
-      const inputText = isQuery
-        ? `Represent this sentence for searching relevant passages: ${text}`
-        : text;
-
-      const embedding = await this.hf.featureExtraction({
-        model: this.model,
-        inputs: inputText,
-      });
-
-      // The response is a number[] for single input
-      const vector = Array.isArray(embedding[0])
-        ? (embedding[0] as number[])
-        : (embedding as number[]);
-
-      // Normalize the embedding for cosine similarity
-      const normalized = this.normalize(vector);
+      const embedding = await this.embeddings.embedQuery(text);
+      
+      // Normalize the embedding for cosine similarity (required by Qdrant)
+      const normalized = this.normalize(embedding);
 
       this.logger.debug(
         `Generated embedding with ${normalized.length} dimensions`,
@@ -51,26 +40,12 @@ export class EmbeddingService {
   /**
    * Generate embeddings for multiple texts (batch)
    */
-  async embedTexts(
-    texts: string[],
-    isQuery: boolean = false,
-  ): Promise<number[][]> {
+  async embedTexts(texts: string[]): Promise<number[][]> {
     try {
-      const inputTexts = isQuery
-        ? texts.map(
-            (t) => `Represent this sentence for searching relevant passages: ${t}`,
-          )
-        : texts;
-
-      const embeddings = await this.hf.featureExtraction({
-        model: this.model,
-        inputs: inputTexts,
-      });
+      const embeddings = await this.embeddings.embedDocuments(texts);
 
       // Normalize all embeddings
-      const normalized = (embeddings as number[][]).map((emb) =>
-        this.normalize(emb),
-      );
+      const normalized = embeddings.map((emb) => this.normalize(emb));
 
       this.logger.debug(
         `Generated ${normalized.length} embeddings with ${normalized[0]?.length} dimensions each`,

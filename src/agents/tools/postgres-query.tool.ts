@@ -8,6 +8,7 @@ export interface PostgresQueryParams {
   minExperienceYears?: number;
   location?: string;
   limit?: number;
+  minSkillMatchPercentage?: number; // 0-100, default 60%
 }
 
 export interface PostgresQueryResult {
@@ -50,34 +51,48 @@ export class PostgresQueryTool {
         );
       }
 
-      // Filter by location (case-insensitive)
-      if (params.location) {
-        queryBuilder.andWhere(
-          'LOWER(candidate.location) LIKE LOWER(:location)',
-          { location: `%${params.location}%` },
-        );
-      }
+      // // Filter by location (case-insensitive)
+      // if (params.location) {
+      //   queryBuilder.andWhere(
+      //     'LOWER(candidate.location) LIKE LOWER(:location)',
+      //     { location: `%${params.location}%` },
+      //   );
+      // }
 
-      // Filter by skills (JSONB query)
+      // Filter by skills (JSONB query with minimum match percentage)
       if (params.skills && params.skills.length > 0) {
-        // Create conditions for each skill
-        const skillConditions = params.skills.map((skill, index) => {
-          return `EXISTS (
-            SELECT 1 FROM jsonb_array_elements(candidate.skills) AS s
-            WHERE LOWER(s->>'name') LIKE LOWER(:skill${index})
-          )`;
-        });
+        const minMatchPercentage = params.minSkillMatchPercentage ?? 60; // Default 60%
+        const minMatchCount = Math.ceil((params.skills.length * minMatchPercentage) / 100);
 
-        // Join with OR - match any of the required skills
+        this.logger.log(
+          `Requiring ${minMatchCount}/${params.skills.length} skills (${minMatchPercentage}% match)`,
+        );
+
+        // Create a subquery that counts matching skills
+        const skillCheckConditions = params.skills
+          .map((_, index) => {
+            return `(
+              CASE WHEN EXISTS (
+                SELECT 1 FROM jsonb_array_elements(candidate.skills) AS s
+                WHERE LOWER(s->>'name') LIKE LOWER(:skill${index})
+              ) THEN 1 ELSE 0 END
+            )`;
+          })
+          .join(' + ');
+
+        // Add WHERE clause that requires minimum number of matching skills
         queryBuilder.andWhere(
-          `(${skillConditions.join(' OR ')})`,
-          params.skills.reduce(
-            (acc, skill, index) => {
-              acc[`skill${index}`] = `%${skill}%`;
-              return acc;
-            },
-            {} as Record<string, string>,
-          ),
+          `(${skillCheckConditions}) >= :minMatchCount`,
+          {
+            ...params.skills.reduce(
+              (acc, skill, index) => {
+                acc[`skill${index}`] = `%${skill}%`;
+                return acc;
+              },
+              {} as Record<string, string>,
+            ),
+            minMatchCount,
+          },
         );
       }
 

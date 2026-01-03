@@ -20,7 +20,7 @@ import { VectorService } from './vector.service';
           'jobs',
         ),
         embeddingDimensions: parseInt(
-          configService.get<string>('EMBEDDING_DIMENSIONS', '384'),
+          configService.get<string>('EMBEDDING_DIMENSIONS', '768'),
           10,
         ),
       }),
