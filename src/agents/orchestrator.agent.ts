@@ -1,3 +1,41 @@
+/**
+ * =============================================================================
+ * ORCHESTRATOR AGENT
+ * =============================================================================
+ * 
+ * The Orchestrator Agent is the central coordinator in the agentic architecture.
+ * It acts as a task router, delegating incoming tasks to the appropriate
+ * specialized worker agents based on the task type.
+ * 
+ * Responsibilities:
+ * - Route tasks to appropriate worker agents (CandidateIngestionAgent, JobProcessingAgent)
+ * - Handle task results and errors
+ * - Provide unified interface for all AI operations
+ * 
+ * Supported Task Types:
+ * - ingest_cv: Process a single CV/resume file
+ * - ingest_folder: Batch process multiple CVs from a folder
+ * - match_job: Process a job description and find matching candidates
+ * 
+ * Architecture Flow:
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │                     OrchestratorAgent                           │
+ * │                     (Task Router)                               │
+ * └─────────────────────────┬───────────────────────────────────────┘
+ *                           │
+ *           ┌───────────────┴───────────────┐
+ *           ▼                               ▼
+ * ┌─────────────────────┐         ┌─────────────────────┐
+ * │ CandidateIngestion  │         │   JobProcessing     │
+ * │      Agent          │         │      Agent          │
+ * │ (CV Processing)     │         │ (Job + Matching)    │
+ * └─────────────────────┘         └─────────────────────┘
+ * 
+ * @author Niv Arad
+ * @version 1.0.0
+ * =============================================================================
+ */
+
 import { Injectable, Logger } from '@nestjs/common';
 import { CandidateIngestionAgent } from './candidate-ingestion.agent';
 import { JobProcessingAgent } from './job-processing.agent';
@@ -5,18 +43,30 @@ import { PdfParserService } from './services/pdf-parser.service';
 import { AgentProcessingResult, MatchingResult } from '../common/interfaces';
 import { Job } from '../database/entities';
 
+/**
+ * Enum-like type for supported task types
+ * - ingest_cv: Single CV ingestion
+ * - ingest_folder: Batch CV ingestion from folder
+ * - match_job: Job matching with candidates
+ */
 export type TaskType = 'ingest_cv' | 'ingest_folder' | 'match_job';
 
+/**
+ * Task input interface - represents a task to be executed by the orchestrator
+ */
 export interface OrchestratorTask {
   type: TaskType;
   data: {
-    filePath?: string;
-    folderPath?: string;
-    buffer?: Buffer;
-    fileName?: string;
+    filePath?: string;      // File path for file-based processing
+    folderPath?: string;    // Folder path for batch processing
+    buffer?: Buffer;        // File buffer for uploaded files
+    fileName?: string;      // Original filename for buffer uploads
   };
 }
 
+/**
+ * Task result interface - represents the outcome of task execution
+ */
 export interface OrchestratorResult {
   success: boolean;
   taskType: TaskType;
@@ -38,6 +88,13 @@ export interface OrchestratorResult {
   error?: string;
 }
 
+/**
+ * OrchestratorAgent - Central task coordinator
+ * 
+ * This injectable service acts as the main entry point for all AI operations.
+ * It follows the delegation pattern, routing tasks to specialized agents
+ * while providing a unified interface to the rest of the application.
+ */
 @Injectable()
 export class OrchestratorAgent {
   private readonly logger = new Logger(OrchestratorAgent.name);
@@ -50,6 +107,12 @@ export class OrchestratorAgent {
 
   /**
    * Main entry point - delegates tasks to appropriate worker agents
+   * 
+   * This method acts as a task router, examining the task type and
+   * delegating to the appropriate specialized agent for processing.
+   * 
+   * @param task - The task to execute with type and data
+   * @returns Promise<OrchestratorResult> - Result of task execution
    */
   async executeTask(task: OrchestratorTask): Promise<OrchestratorResult> {
     this.logger.log(`Orchestrator received task: ${task.type}`);
@@ -74,7 +137,13 @@ export class OrchestratorAgent {
   }
 
   /**
-   * Handle single CV ingestion
+   * Handle single CV ingestion task
+   * 
+   * Delegates to CandidateIngestionAgent for processing a single CV.
+   * Supports both file path and buffer (uploaded file) inputs.
+   * 
+   * @param data - CV file data (either filePath or buffer+fileName)
+   * @returns Promise<OrchestratorResult> - Ingestion result with candidate ID
    */
   private async handleCVIngestion(data: {
     filePath?: string;
@@ -121,7 +190,18 @@ export class OrchestratorAgent {
 
   /**
    * Handle folder ingestion (batch processing)
-   * Continues on failures and returns partial results
+   * 
+   * Processes all PDF files in a given folder. This method continues
+   * processing even if individual files fail, collecting successful
+   * results and error information for failed files.
+   * 
+   * Error Handling Strategy:
+   * - Individual file failures don't stop batch processing
+   * - Failed files are tracked with their error messages
+   * - Returns partial success with both successes and failures
+   * 
+   * @param data - Folder path containing CV PDFs
+   * @returns Promise<OrchestratorResult> - Batch processing results
    */
   private async handleFolderIngestion(data: {
     folderPath?: string;
@@ -200,7 +280,17 @@ export class OrchestratorAgent {
   }
 
   /**
-   * Handle job matching
+   * Handle job matching task
+   * 
+   * Delegates to JobProcessingAgent to:
+   * 1. Parse the job description PDF
+   * 2. Extract structured job data using LLM
+   * 3. Save job to databases (PostgreSQL + Qdrant)
+   * 4. Find matching candidates using dual search strategy
+   * 5. Calculate sophisticated match scores
+   * 
+   * @param data - Job description file data
+   * @returns Promise<OrchestratorResult> - Job and matching candidates
    */
   private async handleJobMatching(data: {
     filePath?: string;

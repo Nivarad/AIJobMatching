@@ -1,3 +1,62 @@
+/**
+ * =============================================================================
+ * JOB PROCESSING AGENT
+ * =============================================================================
+ * 
+ * The Job Processing Agent is responsible for processing job descriptions and
+ * finding matching candidates using a dual search strategy that combines SQL
+ * queries and semantic vector search.
+ * 
+ * Key Responsibilities:
+ * 1. Parse and extract structured data from job description PDFs
+ * 2. Store job data in both PostgreSQL and Qdrant
+ * 3. Execute dual search strategy (SQL + Vector) to find candidates
+ * 4. Calculate sophisticated match scores considering multiple factors
+ * 
+ * Dual Search Strategy:
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │                    JOB MATCHING PIPELINE                                │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *                                    │
+ *                    ┌───────────────┴───────────────┐
+ *                    ▼                               ▼
+ * ┌─────────────────────────────┐    ┌─────────────────────────────┐
+ * │     SQL Query (PostgreSQL)  │    │   Vector Search (Qdrant)    │
+ * │                             │    │                             │
+ * │ Filters candidates by:      │    │ Semantic similarity using:  │
+ * │ - Required skills (JSONB)   │    │ - Job summary embedding     │
+ * │ - Years of experience       │    │ - Candidate embeddings      │
+ * │ - Skill match percentage    │    │ - Cosine similarity         │
+ * └─────────────────────────────┘    └─────────────────────────────┘
+ *                    │                               │
+ *                    └───────────────┬───────────────┘
+ *                                    ▼
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │                      RESULT MERGING                                      │
+ * │                                                                          │
+ * │ - Combine results from both searches                                    │
+ * │ - Identify "dual matches" (found in both SQL and vector)                │
+ * │ - Calculate sophisticated match scores                                   │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ *                                    │
+ *                                    ▼
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │                   SOPHISTICATED SCORING                                  │
+ * │                                                                          │
+ * │ Weighted factors:                                                        │
+ * │ - Skill match (35%): Required vs optional skills                         │
+ * │ - Skill proficiency (15%): Experience levels match                       │
+ * │ - Experience years (20%): Meets/exceeds requirements                     │
+ * │ - Location match (10%): Same city/region/remote                          │
+ * │ - Vector similarity (15%): Semantic relevance                            │
+ * │ - SQL match bonus (5%): Found in structured search                       │
+ * └─────────────────────────────────────────────────────────────────────────┘
+ * 
+ * @author  Niv Arad
+ * @version 1.0.0
+ * =============================================================================
+ */
+
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -16,6 +75,12 @@ import {
 } from './tools/matching-grade.tool';
 import { MatchingResult, ExtractedJobData } from '../common/interfaces';
 
+/**
+ * JobProcessingAgent - Specialized agent for job processing and candidate matching
+ * 
+ * This agent combines job processing with intelligent candidate matching using
+ * multiple tools: PostgresQueryTool, VectorSearchTool, and MatchingGradeTool.
+ */
 @Injectable()
 export class JobProcessingAgent {
   private readonly logger = new Logger(JobProcessingAgent.name);
@@ -35,12 +100,18 @@ export class JobProcessingAgent {
     private readonly matchingGradeTool: MatchingGradeTool,
     @Inject('LLM_CONFIG') private config: LLMConfig,
   ) {
+    // Maximum number of candidates to return in results (configurable via env)
     this.maxCandidatesReturn = config.maxCandidatesReturn;
   }
 
   /**
    * Process a job description file and find matching candidates
-   * Returns top 5 candidates sorted by match score
+   * 
+   * Main entry point for job processing from file paths. Executes the full
+   * pipeline: parse → extract → store → match → score.
+   * 
+   * @param filePath - Path to the job description PDF
+   * @returns Promise with job entity, matched candidates, and search metadata
    */
   async processJobAndMatch(
     filePath: string,
@@ -55,22 +126,31 @@ export class JobProcessingAgent {
   }> {
     this.logger.log(`Processing job description: ${filePath}`);
 
-    // Step 1: Parse PDF
+    // =========================================================================
+    // STEP 1: Parse PDF
+    // =========================================================================
     const parsedDoc = await this.pdfParserService.parsePdf(filePath);
     this.logger.log(`Parsed job PDF: ${parsedDoc.fileName}`);
 
-    // Step 2: Extract structured data using LLM
+    // =========================================================================
+    // STEP 2: Extract structured data using LLM
+    // =========================================================================
+    // Uses Gemini 2.5 Flash Lite to extract: title, requirements, salary, etc.
     const extractedData = await this.llmService.extractJobData(parsedDoc.text);
     this.logger.log(`Extracted job data: ${extractedData.title}`);
 
-    // Step 3: Generate search-optimized summary
+    // =========================================================================
+    // STEP 3: Generate search-optimized summary
+    // =========================================================================
     const searchSummary = await this.llmService.generateSearchSummary(
       'job',
       extractedData,
     );
     this.logger.log(`Generated job summary`);
 
-    // Step 4: Save job to database
+    // =========================================================================
+    // STEP 4: Save job to PostgreSQL
+    // =========================================================================
     const job = await this.saveJobToPostgres(
       extractedData,
       searchSummary,
@@ -78,13 +158,17 @@ export class JobProcessingAgent {
       filePath,
     );
 
-    // Step 5: Save to Qdrant
+    // =========================================================================
+    // STEP 5: Save to Qdrant vector database
+    // =========================================================================
     const embedding = await this.embeddingService.embedText(searchSummary);
     const qdrantPointId = await this.saveJobToQdrant(job, embedding, searchSummary);
     job.qdrantPointId = qdrantPointId;
     await this.jobRepository.save(job);
 
-    // Step 6: Find matching candidates
+    // =========================================================================
+    // STEP 6: Find matching candidates using dual search strategy
+    // =========================================================================
     const matchResult = await this.findMatchingCandidates(
       extractedData,
       searchSummary,
@@ -99,6 +183,13 @@ export class JobProcessingAgent {
 
   /**
    * Process a job from buffer and find matching candidates
+   * 
+   * Similar to processJobAndMatch but works with file buffers from HTTP uploads.
+   * This is the primary method used when job descriptions are uploaded via the API.
+   * 
+   * @param buffer - PDF file buffer from upload
+   * @param fileName - Original filename for reference
+   * @returns Promise with job entity, matched candidates, and search metadata
    */
   async processJobFromBuffer(
     buffer: Buffer,
@@ -155,7 +246,22 @@ export class JobProcessingAgent {
 
   /**
    * Find matching candidates using both SQL and vector search
-   * Uses sophisticated scoring algorithm for accurate matching
+   * 
+   * This is the core matching algorithm that implements the dual search strategy.
+   * It combines structured filtering (SQL) with semantic similarity (vector search)
+   * to find the most relevant candidates.
+   * 
+   * Algorithm:
+   * 1. Execute SQL query with skill and experience filters
+   * 2. Execute vector search using job summary embedding
+   * 3. Merge results, identifying "dual matches" found in both
+   * 4. Fetch full candidate data for sophisticated scoring
+   * 5. Calculate weighted match scores
+   * 6. Return top N candidates sorted by score
+   * 
+   * @param jobData - Extracted job data with requirements
+   * @param jobSummary - Search-optimized job summary
+   * @returns Promise with matched candidates and search metadata
    */
   private async findMatchingCandidates(
     jobData: ExtractedJobData,
@@ -170,14 +276,17 @@ export class JobProcessingAgent {
   }> {
     this.logger.log('Finding matching candidates...');
 
-    // Extract required skills from job
+    // =========================================================================
+    // EXTRACT JOB REQUIREMENTS
+    // =========================================================================
+    // Separate required skills from preferred/optional skills
     const requiredSkills = jobData.requirements
       .filter((r) => r.required)
       .map((r) => r.skill);
 
     const allSkills = jobData.requirements.map((r) => r.skill);
 
-    // Get minimum experience requirement
+    // Get minimum experience requirement (lowest of all specified)
     const minExperience = Math.min(
       ...jobData.requirements
         .filter((r) => r.minYearsExperience !== undefined)
@@ -185,18 +294,24 @@ export class JobProcessingAgent {
       0,
     );
 
-    // Step 1: SQL Query
+    // =========================================================================
+    // STEP 1: SQL Query - Structured filtering
+    // =========================================================================
+    // Query PostgreSQL with skill and experience filters
+    // Uses JSONB queries for flexible skill matching
     this.logger.log('Executing SQL query...');
     const sqlResults = await this.postgresQueryTool.queryCandidates({
       skills: allSkills,
       minExperienceYears: minExperience > 0 ? minExperience : undefined,
-      // location: jobData.location,
       limit: 20,
-      minSkillMatchPercentage: 30, // Require 30% skill overlap
+      minSkillMatchPercentage: 30, // Require 30% skill overlap for recall
     });
     this.logger.log(`SQL found ${sqlResults.length} candidates`);
 
-    // Step 2: Vector Search
+    // =========================================================================
+    // STEP 2: Vector Search - Semantic similarity
+    // =========================================================================
+    // Search Qdrant using job summary embedding for semantic matches
     this.logger.log('Executing vector search...');
     const vectorResults = await this.vectorSearchTool.searchCandidates({
       queryText: jobSummary,
@@ -204,7 +319,10 @@ export class JobProcessingAgent {
     });
     this.logger.log(`Vector search found ${vectorResults.length} candidates`);
 
-    // Step 3: Merge results and identify dual matches
+    // =========================================================================
+    // STEP 3: Merge results and identify dual matches
+    // =========================================================================
+    // Create a map to track candidates from both search methods
     const candidateMap = new Map<
       string,
       {
@@ -215,7 +333,7 @@ export class JobProcessingAgent {
       }
     >();
 
-    // Add SQL results
+    // Add SQL results to map
     for (const result of sqlResults) {
       candidateMap.set(result.candidateId, {
         sqlMatch: true,
@@ -224,10 +342,11 @@ export class JobProcessingAgent {
       });
     }
 
-    // Add/merge vector results
+    // Add/merge vector results - track dual matches
     for (const result of vectorResults) {
       const existing = candidateMap.get(result.candidateId);
       if (existing) {
+        // Dual match - found in both SQL and vector search
         existing.vectorMatch = true;
         existing.vectorScore = result.vectorScore;
       } else {
@@ -240,7 +359,9 @@ export class JobProcessingAgent {
       }
     }
 
-    // Step 4: Fetch full candidate data for sophisticated scoring
+    // =========================================================================
+    // STEP 4: Fetch full candidate data for sophisticated scoring
+    // =========================================================================
     const candidateIds = Array.from(candidateMap.keys());
     const fullCandidates = await this.candidateRepository.find({
       where: { id: In(candidateIds) },
@@ -251,7 +372,7 @@ export class JobProcessingAgent {
       candidateDataMap.set(candidate.id, candidate);
     }
 
-    // Build job match data for sophisticated scoring
+    // Build job match data structure for scoring algorithm
     const jobMatchData: JobMatchData = {
       requirements: jobData.requirements,
       location: jobData.location,
@@ -259,12 +380,15 @@ export class JobProcessingAgent {
       minExperienceYears: minExperience > 0 ? minExperience : undefined,
     };
 
-    // Step 5: Calculate sophisticated scores
+    // =========================================================================
+    // STEP 5: Calculate sophisticated match scores
+    // =========================================================================
     this.logger.log('Calculating sophisticated match scores...');
     const candidates: MatchingResult[] = [];
     let dualMatchCount = 0;
 
     for (const [candidateId, match] of candidateMap) {
+      // Count dual matches for metadata
       if (match.sqlMatch && match.vectorMatch) {
         dualMatchCount++;
       }
@@ -285,6 +409,7 @@ export class JobProcessingAgent {
           summary: fullCandidate.summary,
         };
 
+        // Calculate weighted score considering all factors
         scoreBreakdown = this.matchingGradeTool.calculateSophisticatedScore(
           candidateMatchData,
           jobMatchData,
@@ -301,10 +426,12 @@ export class JobProcessingAgent {
         );
       }
 
+      // Build match sources array
       const matchSources: ('sql' | 'vector')[] = [];
       if (match.sqlMatch) matchSources.push('sql');
       if (match.vectorMatch) matchSources.push('vector');
 
+      // Construct final result with all details
       candidates.push({
         candidateId,
         name: match.data.name || fullCandidate?.name,
@@ -332,7 +459,9 @@ export class JobProcessingAgent {
       });
     }
 
-    // Sort by score and take top N
+    // =========================================================================
+    // STEP 6: Sort and return top N candidates
+    // =========================================================================
     candidates.sort((a, b) => b.matchScore - a.matchScore);
     const topCandidates = candidates.slice(0, this.maxCandidatesReturn);
 
@@ -351,7 +480,15 @@ export class JobProcessingAgent {
   }
 
   /**
-   * Save job to PostgreSQL
+   * Save job to PostgreSQL database
+   * 
+   * Stores structured job data for querying and reference.
+   * 
+   * @param data - Extracted job data from LLM
+   * @param summary - Search-optimized summary
+   * @param rawText - Original PDF text
+   * @param filePath - Source file path
+   * @returns Promise<Job> - Saved job entity
    */
   private async saveJobToPostgres(
     data: ExtractedJobData,
@@ -378,7 +515,14 @@ export class JobProcessingAgent {
   }
 
   /**
-   * Save job to Qdrant
+   * Save job embedding to Qdrant vector database
+   * 
+   * Stores job embedding for potential candidate-to-job matching.
+   * 
+   * @param job - Job entity from PostgreSQL
+   * @param embedding - 768-dimensional embedding vector
+   * @param summary - Search summary for payload
+   * @returns Promise<string> - Qdrant point ID
    */
   private async saveJobToQdrant(
     job: Job,

@@ -1,3 +1,29 @@
+/**
+ * =============================================================================
+ * LLM SERVICE - Google Gemini Integration
+ * =============================================================================
+ * 
+ * This service provides LLM capabilities using Google Gemini 2.5 Flash Lite.
+ * It handles all text generation tasks including:
+ * - Structured data extraction from CVs and job descriptions
+ * - Search-optimized summary generation
+ * - Match grading between candidates and jobs
+ * 
+ * Key Features:
+ * - Structured Output: Uses Zod schemas with JSON response format
+ * - Low Temperature: 0.1 for consistent, deterministic outputs
+ * - Schema Validation: All responses validated against Zod schemas
+ * 
+ * Model: gemini-2.5-flash-lite
+ * - Fast inference for production workloads
+ * - Supports structured JSON output
+ * - Large context window for lengthy documents
+ * 
+ * @author Niv Arad
+ * @version 1.0.0
+ * =============================================================================
+ */
+
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
@@ -7,22 +33,36 @@ import {
   ExtractedJobData,
 } from '../../common/interfaces';
 
+/**
+ * Configuration interface for LLM service
+ */
 export interface LLMConfig {
-  geminiApiKey: string;
-  llmModel: string;
-  embeddingModel: string;
-  maxCandidatesReturn: number;
-  dualMatchScore: number;
+  geminiApiKey: string;          // Google AI API key
+  llmModel: string;              // Model identifier (e.g., gemini-2.5-flash-lite)
+  embeddingModel: string;        // Embedding model (e.g., text-embedding-004)
+  maxCandidatesReturn: number;   // Max candidates to return in matching
+  dualMatchScore: number;        // Score for candidates found in both searches
 }
 
-// Zod Schemas for Structured Output
+// =============================================================================
+// ZOD SCHEMAS FOR STRUCTURED OUTPUT
+// =============================================================================
+// These schemas define the expected JSON structure for LLM responses.
+// They are converted to JSON Schema for the Gemini API.
+
+/**
+ * Skill proficiency levels - used for both candidates and requirements
+ */
 const ExperienceLevelSchema = z.enum([
-  'beginner',
-  'intermediate',
-  'advanced',
-  'expert',
+  'beginner',       // < 1 year experience
+  'intermediate',   // 1-3 years experience
+  'advanced',       // 3-5 years experience
+  'expert',         // 5+ years experience
 ]);
 
+/**
+ * Individual skill with proficiency information
+ */
 const SkillSchema = z.object({
   name: z.string().describe('Name of the skill'),
   level: ExperienceLevelSchema.describe('Proficiency level of the skill'),
@@ -32,6 +72,9 @@ const SkillSchema = z.object({
     .describe('Years of experience with this skill'),
 });
 
+/**
+ * Work experience entry from a CV
+ */
 const WorkExperienceSchema = z.object({
   company: z.string().describe('Company name'),
   title: z.string().describe('Job title'),
@@ -41,6 +84,9 @@ const WorkExperienceSchema = z.object({
   skills: z.array(z.string()).describe('Skills used in this role'),
 });
 
+/**
+ * Education entry from a CV
+ */
 const EducationSchema = z.object({
   institution: z.string().describe('Name of the educational institution'),
   degree: z.string().describe('Type of degree'),
@@ -48,6 +94,10 @@ const EducationSchema = z.object({
   graduationYear: z.number().nullable().describe('Year of graduation'),
 });
 
+/**
+ * Complete candidate extraction schema
+ * This is the output format for CV data extraction
+ */
 const CandidateExtractionSchema = z.object({
   name: z.string().nullable().describe('Full name of the candidate'),
   email: z.string().nullable().describe('Email address'),
@@ -64,6 +114,9 @@ const CandidateExtractionSchema = z.object({
     .describe('Total years of professional experience'),
 });
 
+/**
+ * Job requirement with skill and experience needs
+ */
 const JobRequirementSchema = z.object({
   skill: z.string().describe('Required skill name'),
   required: z.boolean().describe('True if mandatory, false if preferred'),
@@ -73,12 +126,19 @@ const JobRequirementSchema = z.object({
     .describe('Minimum years of experience required'),
 });
 
+/**
+ * Salary range for job postings
+ */
 const SalaryRangeSchema = z.object({
   min: z.number().describe('Minimum salary'),
   max: z.number().describe('Maximum salary'),
   currency: z.string().describe('Currency code (e.g., USD)'),
 });
 
+/**
+ * Complete job extraction schema
+ * This is the output format for job description extraction
+ */
 const JobExtractionSchema = z.object({
   title: z.string().describe('Job title'),
   description: z.string().describe('Brief job description'),
@@ -95,6 +155,9 @@ const JobExtractionSchema = z.object({
   benefits: z.array(z.string()).nullable().describe('List of benefits'),
 });
 
+/**
+ * Match grade schema for candidate-job matching
+ */
 const MatchGradeSchema = z.object({
   grade: z
     .number()
@@ -104,6 +167,12 @@ const MatchGradeSchema = z.object({
   reasoning: z.string().describe('Explanation of the match score'),
 });
 
+/**
+ * LLMService - Main service for LLM operations
+ * 
+ * Provides methods for extracting structured data from text using
+ * Google Gemini 2.5 Flash Lite with structured JSON output.
+ */
 @Injectable()
 export class LLMService {
   private readonly logger = new Logger(LLMService.name);
@@ -118,8 +187,19 @@ export class LLMService {
 
   /**
    * Extract structured candidate data from CV text
+   * 
+   * Uses Gemini with structured output to reliably extract:
+   * - Personal information (name, email, phone, location)
+   * - Skills with proficiency levels
+   * - Work experience history
+   * - Education background
+   * - Total years of experience
+   * 
+   * @param cvText - Raw text extracted from CV PDF
+   * @returns Promise<ExtractedCandidateData> - Structured candidate data
    */
   async extractCandidateData(cvText: string): Promise<ExtractedCandidateData> {
+    // Craft prompt with clear instructions for the LLM
     const prompt = `You are an expert HR assistant that extracts structured information from resumes/CVs.
 Extract all relevant information from the following CV.
 
@@ -133,16 +213,18 @@ CV TEXT:
 ${cvText}`;
 
     try {
+      // Call Gemini API with structured output configuration
       const response = await this.ai.models.generateContent({
         model: this.modelName,
         contents: prompt,
         config: {
-          responseMimeType: 'application/json',
+          responseMimeType: 'application/json',  // Request JSON response
           responseSchema: zodToJsonSchema(CandidateExtractionSchema as any) as any,
-          temperature: 0.1,
+          temperature: 0.1,  // Low temperature for consistent output
         },
       });
 
+      // Parse and validate response against schema
       const data = CandidateExtractionSchema.parse(
         JSON.parse(response.text as string),
       ) as ExtractedCandidateData;
@@ -159,6 +241,15 @@ ${cvText}`;
 
   /**
    * Extract structured job data from job description text
+   * 
+   * Uses Gemini with structured output to extract:
+   * - Job title and description
+   * - Company and location
+   * - Required and preferred skills
+   * - Salary range and benefits
+   * 
+   * @param jobText - Raw text extracted from job description PDF
+   * @returns Promise<ExtractedJobData> - Structured job data
    */
   async extractJobData(jobText: string): Promise<ExtractedJobData> {
     const prompt = `You are an expert HR assistant that extracts structured information from job descriptions.
