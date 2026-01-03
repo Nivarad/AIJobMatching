@@ -1,14 +1,19 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Job } from '../database/entities';
+import { Repository, In } from 'typeorm';
+import { Job, Candidate } from '../database/entities';
 import { VectorService, JobPayload } from '../vector/vector.service';
 import { LLMService, LLMConfig } from './services/llm.service';
 import { EmbeddingService } from './services/embedding.service';
 import { PdfParserService } from './services/pdf-parser.service';
 import { PostgresQueryTool } from './tools/postgres-query.tool';
 import { VectorSearchTool, VectorSearchResult } from './tools/vector-search.tool';
-import { MatchingGradeTool } from './tools/matching-grade.tool';
+import { 
+  MatchingGradeTool, 
+  CandidateMatchData, 
+  JobMatchData,
+  MatchScoreBreakdown 
+} from './tools/matching-grade.tool';
 import { MatchingResult, ExtractedJobData } from '../common/interfaces';
 
 @Injectable()
@@ -19,6 +24,8 @@ export class JobProcessingAgent {
   constructor(
     @InjectRepository(Job)
     private jobRepository: Repository<Job>,
+    @InjectRepository(Candidate)
+    private candidateRepository: Repository<Candidate>,
     private readonly vectorService: VectorService,
     private readonly llmService: LLMService,
     private readonly embeddingService: EmbeddingService,
@@ -148,6 +155,7 @@ export class JobProcessingAgent {
 
   /**
    * Find matching candidates using both SQL and vector search
+   * Uses sophisticated scoring algorithm for accurate matching
    */
   private async findMatchingCandidates(
     jobData: ExtractedJobData,
@@ -184,7 +192,7 @@ export class JobProcessingAgent {
       minExperienceYears: minExperience > 0 ? minExperience : undefined,
       // location: jobData.location,
       limit: 20,
-      minSkillMatchPercentage: 60, // Require 60% skill overlap
+      minSkillMatchPercentage: 30, // Require 30% skill overlap
     });
     this.logger.log(`SQL found ${sqlResults.length} candidates`);
 
@@ -232,8 +240,27 @@ export class JobProcessingAgent {
       }
     }
 
-    // Step 4: Calculate scores
-    this.logger.log('Calculating match scores...');
+    // Step 4: Fetch full candidate data for sophisticated scoring
+    const candidateIds = Array.from(candidateMap.keys());
+    const fullCandidates = await this.candidateRepository.find({
+      where: { id: In(candidateIds) },
+    });
+
+    const candidateDataMap = new Map<string, Candidate>();
+    for (const candidate of fullCandidates) {
+      candidateDataMap.set(candidate.id, candidate);
+    }
+
+    // Build job match data for sophisticated scoring
+    const jobMatchData: JobMatchData = {
+      requirements: jobData.requirements,
+      location: jobData.location,
+      summary: jobSummary,
+      minExperienceYears: minExperience > 0 ? minExperience : undefined,
+    };
+
+    // Step 5: Calculate sophisticated scores
+    this.logger.log('Calculating sophisticated match scores...');
     const candidates: MatchingResult[] = [];
     let dualMatchCount = 0;
 
@@ -242,11 +269,37 @@ export class JobProcessingAgent {
         dualMatchCount++;
       }
 
-      const score = this.matchingGradeTool.calculateFinalScore(
-        match.sqlMatch,
-        match.vectorMatch,
-        match.vectorScore,
-      );
+      const fullCandidate = candidateDataMap.get(candidateId);
+      
+      let score: number;
+      let scoreBreakdown: MatchScoreBreakdown | undefined;
+
+      if (fullCandidate) {
+        // Use sophisticated scoring with full candidate data
+        const candidateMatchData: CandidateMatchData = {
+          skills: fullCandidate.skills,
+          experience: fullCandidate.experience,
+          education: fullCandidate.education,
+          totalExperienceYears: fullCandidate.totalExperienceYears,
+          location: fullCandidate.location,
+          summary: fullCandidate.summary,
+        };
+
+        scoreBreakdown = this.matchingGradeTool.calculateSophisticatedScore(
+          candidateMatchData,
+          jobMatchData,
+          match.vectorScore,
+          match.sqlMatch,
+        );
+        score = scoreBreakdown.totalScore;
+      } else {
+        // Fallback to simple scoring if full data not available
+        score = this.matchingGradeTool.calculateFinalScore(
+          match.sqlMatch,
+          match.vectorMatch,
+          match.vectorScore,
+        );
+      }
 
       const matchSources: ('sql' | 'vector')[] = [];
       if (match.sqlMatch) matchSources.push('sql');
@@ -254,18 +307,28 @@ export class JobProcessingAgent {
 
       candidates.push({
         candidateId,
-        name: match.data.name,
-        email: match.data.email,
+        name: match.data.name || fullCandidate?.name,
+        email: match.data.email || fullCandidate?.email,
         matchScore: score,
         matchSources,
         matchDetails: {
           sqlMatch: match.sqlMatch,
           vectorMatch: match.vectorMatch,
           vectorScore: match.vectorScore,
+          // Include sophisticated score breakdown if available
+          ...(scoreBreakdown && {
+            skillScore: scoreBreakdown.skillScore,
+            proficiencyScore: scoreBreakdown.proficiencyScore,
+            experienceScore: scoreBreakdown.experienceScore,
+            locationScore: scoreBreakdown.locationScore,
+            matchedSkillsCount: scoreBreakdown.matchedSkills.length,
+            missingRequiredSkills: scoreBreakdown.missingRequiredSkills,
+            reasoning: scoreBreakdown.reasoning,
+          }),
         },
-        skills: match.data.skills || [],
-        experienceYears: match.data.experienceYears || match.data.totalExperienceYears || 0,
-        summary: match.data.summary,
+        skills: match.data.skills || fullCandidate?.skills.map(s => s.name) || [],
+        experienceYears: match.data.experienceYears || fullCandidate?.totalExperienceYears || 0,
+        summary: match.data.summary || fullCandidate?.summary,
       });
     }
 

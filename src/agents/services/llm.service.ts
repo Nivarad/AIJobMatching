@@ -138,7 +138,7 @@ ${cvText}`;
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          responseSchema: zodToJsonSchema(CandidateExtractionSchema) as any,
+          responseSchema: zodToJsonSchema(CandidateExtractionSchema as any) as any,
           temperature: 0.1,
         },
       });
@@ -178,7 +178,7 @@ ${jobText}`;
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          responseSchema: zodToJsonSchema(JobExtractionSchema) as any,
+          responseSchema: zodToJsonSchema(JobExtractionSchema as any) as any,
           temperature: 0.1,
         },
       });
@@ -222,7 +222,7 @@ Evaluate the match and provide a grade from 0-100 with reasoning.`;
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
-          responseSchema: zodToJsonSchema(MatchGradeSchema) as any,
+          responseSchema: zodToJsonSchema(MatchGradeSchema as any) as any,
           temperature: 0.1,
         },
       });

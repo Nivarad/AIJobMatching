@@ -69,6 +69,14 @@ export interface MatchingResult {
     vectorMatch: boolean;
     vectorScore?: number;
     llmGrade?: number;
+    // Sophisticated scoring breakdown
+    skillScore?: number;
+    proficiencyScore?: number;
+    experienceScore?: number;
+    locationScore?: number;
+    matchedSkillsCount?: number;
+    missingRequiredSkills?: string[];
+    reasoning?: string;
   };
   skills: string[];
   experienceYears: number; // Can be decimal (e.g., 19.5 years)

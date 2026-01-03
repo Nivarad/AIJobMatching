@@ -61,8 +61,8 @@ export class PostgresQueryTool {
 
       // Filter by skills (JSONB query with minimum match percentage)
       if (params.skills && params.skills.length > 0) {
-        const minMatchPercentage = params.minSkillMatchPercentage ?? 60; // Default 60%
-        const minMatchCount = Math.ceil((params.skills.length * minMatchPercentage) / 100);
+        const minMatchPercentage = params.minSkillMatchPercentage ?? 30; // Default 30% - lowered from 60% for better recall
+        const minMatchCount = Math.max(1, Math.ceil((params.skills.length * minMatchPercentage) / 100));
 
         this.logger.log(
           `Requiring ${minMatchCount}/${params.skills.length} skills (${minMatchPercentage}% match)`,
