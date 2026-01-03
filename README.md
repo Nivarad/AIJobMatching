@@ -4,11 +4,36 @@ An intelligent job-candidate matching system built with **NestJS** that leverage
 
 ---
 
+## 🎬 Project Video Overview
+
+[![Project Overview Video](./infographic.png)](./project_overview.mp4)
+
+🎥 **Watch the video explanation:** [project_overview.mp4](./project_overview.mp4)
+
+*A narrated video walkthrough of the AI Job Matching System, generated using NotebookLM, explaining the architecture, RAG pipeline, and matching algorithm.*
+
+---
+
 ## 🖼️ System Overview Infographic
 
 ![How an AI Job Matching Engine Works](./infographic.png)
 
 *The infographic above illustrates the complete flow: from PDF ingestion through LLM extraction, dual storage (SQL + Vector), dual-search matching strategy, multi-factor scoring algorithm, to final ranked results delivery.*
+
+---
+
+## 📦 Quick Start Dataset
+
+**Download:** [resume_dataset.zip](./resume_dataset.zip)
+
+This ZIP archive contains everything you need to test the system:
+
+| Contents | Description |
+|----------|-------------|
+| **Resume_Dataset/** | 24 categories of professional resumes (PDF format) |
+| **Jobs Positions/** | Job descriptions for **Accountant positions only** |
+
+> ⚠️ **Note:** The job positions dataset currently focuses exclusively on **Accountant roles**. To test with other professions, you'll need to provide your own job description PDFs.
 
 ---
 
